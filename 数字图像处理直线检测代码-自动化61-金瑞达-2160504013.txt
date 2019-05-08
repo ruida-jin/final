@@ -1,0 +1,327 @@
+%直线检测
+
+%作业要求：
+%1. 首先对测试图像（文件名为：test1~test6）进行边缘检测，可采用书上介绍的Sobel等模板或者cann算子方法；
+%2. 在边缘检测的基础上，用hough变换检测图中直线；
+%3. 比较不同边缘检测算法（2种以上）、不同hough变换参数对直线检测的影响；
+%4. 可以采用Matlab、OpenCV等自带函数。
+
+%按标准格式在考试前提交报告。
+
+%------------------------------------------------Sobel算子处理结果-----------------------------------
+clc
+close all
+clear all
+
+A = imread('test6.jpg');
+A = A(:,:,1);
+sobelA = A;
+cannyA = A;
+[m,n] = size(A);
+subplot(1,2,1);
+imshow(A),title('Origin Image');
+
+B = zeros(m+2,n+2);
+B(2:m+1,2:n+1) = A;
+
+%边缘检测，sobel模板
+sobel1 = [-1 -2 -1;0 0 0;1 2 1];
+sobel2 = [-1 0 1;-2 0 2;-1 0 1];
+sobel3 = [0 1 2;-1 0 1;-2 -1 0];
+sobel4 = [-2 -1 0;-1 0 1;0 1 2];
+
+for i = 2:1:m+1
+   for j = 2:1:n+1
+       sobelA(i-1,j-1) = abs(sum(B(i-1:i+1,j-1:j+1).*sobel2,'all'))...
+           +abs(sum(B(i-1:i+1,j-1:j+1).*sobel2,'all'))...
+           +abs(sum(B(i-1:i+1,j-1:j+1).*sobel3,'all'))...
+           +abs(sum(B(i-1:i+1,j-1:j+1).*sobel4,'all'));
+   end
+end
+
+for i = 1:1:m
+   for j = 1:1:n
+      if sobelA(i,j) <255
+         sobelA(i,j) = 0; 
+      end
+   end
+end
+
+
+subplot(1,2,2);
+imshow(sobelA),title('Processed by Sobel(竖直)');
+
+
+%--------------------------------------------------canny算子处理结果----------------------------------------
+%% test file of canny algorithm.
+close all;
+clear all;
+clc;
+%%
+img = imread('test6.jpg');
+img = img(:,:,1);
+% img = imnoise(img,'salt & pepper',0.01);
+%%
+[~,~,dim] = size(img);
+if dim > 1   %第3维是与颜色有关的信息
+    imgCanny1 = edge(rgb2gray(img),'canny'); % system function.
+else
+    imgCanny1 = edge(img,'canny'); % system function.
+end
+imgCanny2 = edge_canny(img,[5,5],1.4,0.9,0.4); % my function.
+%%
+figure;
+% subplot(2,2,1);
+% imshow(img);
+% title('original');
+%%
+subplot(1,2,1);
+imshow(imgCanny1);
+title('system canny');
+%%
+subplot(1,2,2);
+imshow(imgCanny2);
+title('my canny');
+
+% -------------------------------------------------------------------------
+%   Edge Detection Using Canny Algorithm.
+%   Auther: Yongli Yan.
+%   Mail: yanyongli@ime.ac.cn
+%   Date: 2017.08.01.
+%   The direction of Sobel operator.
+%   ^(y)
+%   |
+%   |
+%   |
+%   0--------->(x)
+%   Direction of Gradient:
+%               3   2   1
+%               0   P   0
+%               1   2   3
+%   P = Current Point.
+%               NW  N  NE
+%               W   P   E
+%               SW  S  SE
+%   Point Index:
+%               f(x-1,y-1)      f(x-1,y)    f(x-1,y+1)
+%               f(x,  y-1)      f(x,  y)    f(x,  y+1)
+%               f(x+1,y-1)      f(x+1,y)    f(x+1,y+1)
+%   Parameters:
+%   percentOfPixelsNotEdges: Used for selecting thresholds.
+%   thresholdRatio: Low thresh is this fraction of the high.
+% -------------------------------------------------------------------------
+function imgCanny = edge_canny(I,gaussDim,sigma,percentOfPixelsNotEdges,thresholdRatio)
+%% Gaussian smoothing filter.
+m = gaussDim(1);  %高斯模板的维数
+n = gaussDim(2);
+if mod(m,2) == 0 || mod(n,2) == 0  %处理不了偶数尺寸的模板
+    error('The dimensionality of Gaussian must be odd!');
+end
+% Generate gaussian convolution kernel.
+gaussKernel = fspecial('gaussian', [m,n], sigma);%生成高斯模板
+% Image edge copy.
+[m,n] = size(gaussKernel);
+[row,col,dim] = size(I);
+if dim > 1
+    imgGray = rgb2gray(I);
+else
+    imgGray = I;
+end
+imgCopy = imgReplicate(imgGray,(m-1)/2,(n-1)/2);
+% Gaussian smoothing filter.
+imgData = zeros(row,col);
+for ii = 1:row
+    for jj = 1:col
+        window = imgCopy(ii:ii+m-1,jj:jj+n-1);
+        GSF = window.*gaussKernel;
+        imgData(ii,jj) = sum(GSF(:));
+    end
+end
+%% Calculate the gradient values for each pixel.
+% Sobel operator.
+dgau2Dx = [-1 0 1;-2 0 2;-1 0 1];
+dgau2Dy = [1 2 1;0 0 0;-1 -2 -1];
+[m,n] = size(dgau2Dx);
+% Image edge copy.
+imgCopy = imgReplicate(imgData,(m-1)/2,(n-1)/2);
+% To store the gradient and direction information.
+gradx = zeros(row,col);
+grady = zeros(row,col);
+gradm = zeros(row,col);
+dir = zeros(row,col); % Direction of gradient.
+% Calculate the gradient values for each pixel.
+for ii = 1:row
+    for jj = 1:col
+        window = imgCopy(ii:ii+m-1,jj:jj+n-1);
+        dx = window.*dgau2Dx;
+        dy = window.*dgau2Dy;
+        dx = dx'; % Make the sum more accurate.
+        dx = sum(dx(:));
+        dy = sum(dy(:));
+        gradx(ii,jj) = dx;
+        grady(ii,jj) = dy;
+        gradm(ii,jj) = sqrt(dx^2 + dy^2);
+        % Calculate the angle of the gradient.
+        theta = atand(dy/dx) + 90; % 0~180.
+        % Determine the direction of the gradient.
+        if (theta >= 0 && theta < 45)
+            dir(ii,jj) = 2;
+        elseif (theta >= 45 && theta < 90)
+            dir(ii,jj) = 3;
+        elseif (theta >= 90 && theta < 135)
+            dir(ii,jj) = 0;
+        else
+            dir(ii,jj) = 1;
+        end
+    end
+end
+% Normalize for threshold selection.
+magMax = max(gradm(:));
+if magMax ~= 0
+    gradm = gradm / magMax;
+end
+%% Plot 3D gradient graph.
+% [xx, yy] = meshgrid(1:col, 1:row);
+% figure;
+% surf(xx,yy,gradm);
+%% Threshold selection.
+counts = imhist(gradm, 64);
+highThresh = find(cumsum(counts) > percentOfPixelsNotEdges*row*col,1,'first') / 64;
+lowThresh = thresholdRatio*highThresh;
+%% Non-Maxima Suppression(NMS) Using Linear Interpolation.
+gradmCopy = zeros(row,col);
+imgBW = zeros(row,col);
+for ii = 2:row-1
+    for jj = 2:col-1
+        E =  gradm(ii,jj+1);
+        S =  gradm(ii+1,jj);
+        W =  gradm(ii,jj-1);
+        N =  gradm(ii-1,jj);
+        NE = gradm(ii-1,jj+1);
+        NW = gradm(ii-1,jj-1);
+        SW = gradm(ii+1,jj-1);
+        SE = gradm(ii+1,jj+1);
+        % Linear interpolation.
+        % dy/dx = tan(theta).
+        % dx/dy = tan(90-theta).
+        gradValue = gradm(ii,jj);
+        if dir(ii,jj) == 0
+            d = abs(grady(ii,jj)/gradx(ii,jj));
+            gradm1 = E*(1-d) + NE*d;
+            gradm2 = W*(1-d) + SW*d;
+        elseif dir(ii,jj) == 1
+            d = abs(gradx(ii,jj)/grady(ii,jj));
+            gradm1 = N*(1-d) + NE*d;
+            gradm2 = S*(1-d) + SW*d;
+        elseif dir(ii,jj) == 2
+            d = abs(gradx(ii,jj)/grady(ii,jj));
+            gradm1 = N*(1-d) + NW*d;
+            gradm2 = S*(1-d) + SE*d;
+        elseif dir(ii,jj) == 3
+            d = abs(grady(ii,jj)/gradx(ii,jj));
+            gradm1 = W*(1-d) + NW*d;
+            gradm2 = E*(1-d) + SE*d;
+        else
+            gradm1 = highThresh;
+            gradm2 = highThresh;
+        end
+        % Non-Maxima Suppression.
+        if gradValue >= gradm1 && gradValue >= gradm2
+            if gradValue >= highThresh
+                imgBW(ii,jj) = 1;
+                gradmCopy(ii,jj) = highThresh;
+            elseif gradValue >= lowThresh
+                gradmCopy(ii,jj) = lowThresh;
+            else
+                gradmCopy(ii,jj) = 0;
+            end
+        else
+            gradmCopy(ii,jj) = 0;
+        end
+    end
+end
+%% High-Low threshold detection.Double-Threshold.
+% If the 8 pixels around the low threshold point have high threshold, then
+% the low threshold pixel should be retained.
+for ii = 2:row-1
+    for jj = 2:col-1
+        if gradmCopy(ii,jj) == lowThresh
+            neighbors = [...
+                gradmCopy(ii-1,jj-1),   gradmCopy(ii-1,jj), gradmCopy(ii-1,jj+1),...
+                gradmCopy(ii,  jj-1),                       gradmCopy(ii,  jj+1),...
+                gradmCopy(ii+1,jj-1),   gradmCopy(ii+1,jj), gradmCopy(ii+1,jj+1)...
+                ];
+            if ~isempty(find(neighbors) == highThresh)
+                imgBW(ii,jj) = 1;
+            end
+        end
+    end
+end
+imgCanny = logical(imgBW);
+end
+%% Local functions. Image Replicate.
+%%将图像移动到中央，防止混淆
+function imgRep = imgReplicate(I,rExt,cExt)
+[row,col] = size(I);
+imgCopy = zeros(row+2*rExt,col+2*cExt);
+% 4 edges and 4 corners pixels.
+top = I(1,:);
+bottom = I(row,:);
+left = I(:,1);
+right = I(:,col);
+topLeftCorner = I(1,1);
+topRightCorner = I(1,col);
+bottomLeftCorner = I(row,1);
+bottomRightCorner = I(row,col);
+% The coordinates of the oroginal image after the expansion in the new graph.
+topLeftR = rExt+1;
+topLeftC = cExt+1;
+bottomLeftR = topLeftR+row-1;
+bottomLeftC = topLeftC;
+topRightR = topLeftR;
+topRightC = topLeftC+col-1;
+bottomRightR = topLeftR+row-1;
+bottomRightC = topLeftC+col-1;
+% Copy original image and 4 edges.
+imgCopy(topLeftR:bottomLeftR,topLeftC:topRightC) = I;
+imgCopy(1:rExt,topLeftC:topRightC) = repmat(top,[rExt,1]);
+imgCopy(bottomLeftR+1:end,bottomLeftC:bottomRightC) = repmat(bottom,[rExt,1]);
+imgCopy(topLeftR:bottomLeftR,1:cExt) = repmat(left,[1,cExt]);
+imgCopy(topRightR:bottomRightR,topRightC+1:end) = repmat(right,[1,cExt]);
+% Copy 4 corners.
+for ii = 1:rExt
+    for jj = 1:cExt
+        imgCopy(ii,jj) = topLeftCorner;
+        imgCopy(ii,jj+topRightC) = topRightCorner;
+        imgCopy(ii+bottomLeftR,jj) = bottomLeftCorner;
+        imgCopy(ii+bottomRightR,jj+bottomRightC) = bottomRightCorner;
+    end
+end
+imgRep = imgCopy;
+end
+%% End of file.
+
+
+%----------------------------------------------------hough直线检测------------------------------------------
+clc,close 
+image=imread('test3.jpg');
+image = image(:,:,1);
+ 
+image=double(image); 
+subplot(121),imshow(image,[]); 
+title('Origin Image');
+%----------------先进性边缘检测----------------
+thresh=[0.02,0.2]; 
+sigma=2; 
+BW = edge(image,'canny',thresh,sigma);
+
+%-----------------得到参数空间------------------ 
+[H, theta, rho]= hough(BW,'RhoResolution', 0.1,'ThetaResolution',0.1); 
+peak=houghpeaks(H,5); %求极值点 
+lines=houghlines(BW,theta,rho,peak); %返回原图直线信息 
+subplot(122),imshow(BW,[]),title('Hough Transform Detect Result'),hold on 
+for k=1:length(lines) 
+    xy=[lines(k).point1;lines(k).point2]; 
+    plot(xy(:,1),xy(:,2),'LineWidth',4); 
+end 
+
